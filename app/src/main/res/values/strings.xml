@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Alipay</string>
+    <string name="dialog_tip_title">提示</string>
+    <string name="request_processing">请求中，请稍后</string>
 </resources>

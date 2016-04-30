@@ -1,4 +1,4 @@
-package com.yxkang.android.alipay;
+package com.yxkang.android.alipay.util;
 
 import java.security.MessageDigest;
 

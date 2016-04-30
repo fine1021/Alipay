@@ -15,6 +15,16 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:textSize="16sp"
-        android:text="Hello World!"/>
+        android:text="Hello World!"
+        android:textSize="16sp"/>
+
+    <Button
+        android:id="@+id/submit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/text"
+        android:gravity="center"
+        android:text="Hello World!"
+        android:textAllCaps="false"
+        android:textSize="16sp"/>
 </RelativeLayout>

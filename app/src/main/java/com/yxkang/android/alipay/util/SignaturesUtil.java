@@ -1,4 +1,4 @@
-package com.yxkang.android.alipay;
+package com.yxkang.android.alipay.util;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
