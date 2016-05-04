@@ -15,17 +15,33 @@ import android.widget.Toast;
 
 import com.alipay.api.AlipayApiException;
 import com.alipay.api.AlipayClient;
-import com.alipay.api.DefaultAlipayClient;
+import com.alipay.api.AlipayRequest;
+import com.alipay.api.AlipayResponse;
+import com.alipay.api.SignItem;
 import com.alipay.api.request.AlipayTradePrecreateRequest;
+import com.alipay.api.request.AlipayTradeQueryRequest;
 import com.alipay.api.response.AlipayTradePrecreateResponse;
-import com.yxkang.android.alipay.event.AlipayResponseEvent;
+import com.alipay.api.response.AlipayTradeQueryResponse;
+import com.yxkang.android.alipay.alipay.AlipayClientFactory;
+import com.yxkang.android.alipay.alipay.PayConstants;
+import com.yxkang.android.alipay.alipay.internal.parser.json.JsonConverter;
+import com.yxkang.android.alipay.builder.AlipayTradePrecreateContentBuilder;
+import com.yxkang.android.alipay.builder.AlipayTradeQueryContentBuilder;
+import com.yxkang.android.alipay.event.AlipayTradePrecreateEvent;
+import com.yxkang.android.alipay.event.AlipayTradeQueryEvent;
 import com.yxkang.android.alipay.model.DialogModel;
 import com.yxkang.android.alipay.model.DialogModelImpl;
+import com.yxkang.android.alipay.model.GoodsDetail;
 import com.yxkang.android.alipay.util.SignaturesUtil;
+import com.yxkang.android.alipay.util.Utils;
 import com.yxkang.rxandroid.RxEventBus;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -41,6 +57,7 @@ public class MainActivity extends AppCompatActivity {
     @BindView(R.id.text)
     TextView mTextView;
     private DialogModel mDialogModel;
+    private final ExecutorService mThreadPool = Executors.newCachedThreadPool();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,21 +70,62 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setSubscriber() {
-        Subscription subscription = RxEventBus.getInstance().ofType(AlipayResponseEvent.class).subscribe(new Action1<AlipayResponseEvent>() {
+        Subscription subscription = RxEventBus.getInstance().ofType(AlipayTradePrecreateEvent.class).subscribe(new Action1<AlipayTradePrecreateEvent>() {
             @Override
-            public void call(AlipayResponseEvent alipayResponseEvent) {
+            public void call(AlipayTradePrecreateEvent alipayTradePrecreateEvent) {
                 mDialogModel.dismissProgressDialog();
-                AlipayTradePrecreateResponse response = alipayResponseEvent.getResponse();
+                AlipayTradePrecreateResponse response = alipayTradePrecreateEvent.getResponse();
                 if (response == null) {
-                    Log.w(TAG, "call: response == null");
+                    Toast.makeText(MainActivity.this, "response == null", Toast.LENGTH_SHORT).show();
+                } else {
+                    Log.i(TAG, "call: body = " + response.getBody());
+                    AlipayTradePrecreateRequest request = alipayTradePrecreateEvent.getRequest();
+                    JsonConverter jsonConverter = new JsonConverter();
+                    try {
+                        SignItem signItem = jsonConverter.getSignItem(request, response);
+                        Log.i(TAG, "call: sign = " + signItem.getSign());
+                        Log.i(TAG, "call: signSourceDate = " + signItem.getSignSourceDate());
+                    } catch (AlipayApiException e) {
+                        e.printStackTrace();
+                    }
+                    if (response.isSuccess()) {
+                        queryAlipayTrade(request, response);
+                        drawQRCode(response.getQrCode());
+                    } else {
+                        Toast.makeText(MainActivity.this, response.getSubMsg(), Toast.LENGTH_SHORT).show();
+                    }
                 }
-                drawQRCode("https://openapi.alipay.com/gateway.do");
             }
         }, new Action1<Throwable>() {
             @Override
             public void call(Throwable throwable) {
                 mDialogModel.dismissProgressDialog();
                 Log.w(TAG, "call: ", throwable);
+            }
+        });
+        RxEventBus.getInstance().subscribe(this, subscription);
+
+        subscription = RxEventBus.getInstance().ofType(AlipayTradeQueryEvent.class).subscribe(new Action1<AlipayTradeQueryEvent>() {
+            @Override
+            public void call(AlipayTradeQueryEvent alipayTradeQueryEvent) {
+                AlipayTradeQueryResponse response = alipayTradeQueryEvent.getResponse();
+                if (response == null) {
+                    Log.i(TAG, "AlipayTradeQueryResponse response == null");
+                    return;
+                }
+                Log.i(TAG, "call: body = " + response.getBody());
+                AlipayTradeQueryRequest request = alipayTradeQueryEvent.getRequest();
+                JsonConverter jsonConverter = new JsonConverter();
+                try {
+                    SignItem signItem = jsonConverter.getSignItem(request, response);
+                    Log.i(TAG, "call: sign = " + signItem.getSign());
+                    Log.i(TAG, "call: signSourceDate = " + signItem.getSignSourceDate());
+                } catch (AlipayApiException e) {
+                    e.printStackTrace();
+                }
+                if (!response.isSuccess()) {
+                    Toast.makeText(MainActivity.this, response.getSubMsg(), Toast.LENGTH_SHORT).show();
+                }
             }
         });
         RxEventBus.getInstance().subscribe(this, subscription);
@@ -107,25 +165,66 @@ public class MainActivity extends AppCompatActivity {
     @OnClick(R.id.submit)
     public void sendPrecreateRequest() {
         mDialogModel.showProgressDialog(getString(R.string.request_processing));
-        new Thread(new Runnable() {
+        Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                AlipayClient alipayClient = new DefaultAlipayClient(PayConstants.SERVER_URL, PayConstants.APP_ID, PayConstants.PRIVATE_KEY,
-                        PayConstants.FORMAT_JSON, PayConstants.CHARSET_UTF8, PayConstants.ALIPAY_PUBLIC_KEY);
+                AlipayClient alipayClient = AlipayClientFactory.getAlipayClient();
                 AlipayTradePrecreateRequest request = new AlipayTradePrecreateRequest();
+                request.setNotifyUrl(PayConstants.NOTIFY_URL);
+                AlipayTradePrecreateContentBuilder builder = new AlipayTradePrecreateContentBuilder();
+                builder.setOutTradeNo(Utils.createTradeNo());
+                builder.setTotalAmount("0.1");
+                builder.setSubject("Orange Juice");
+                List<GoodsDetail> list = new ArrayList<>();
+                list.add(GoodsDetail.newInstance("apple-01", "apple", 5, 1).setBody("apple phone detail"));
+                list.add(GoodsDetail.newInstance("milk-01", "milk", 5, 1).setBody("milk detail"));
+                builder.setGoodsDetailList(list);
+                builder.setTimeExpress("5m");
+                Log.i(TAG, "sendPrecreateRequest: " + builder.toJsonString());
+                request.setBizContent(builder.toJsonString());
                 AlipayTradePrecreateResponse response = null;
                 try {
                     response = alipayClient.execute(request);
                 } catch (AlipayApiException e) {
                     Log.e(TAG, "AlipayApiException", e);
+                } catch (Error error) {
+                    Log.e(TAG, "Error", error);
                 }
-                RxEventBus.getInstance().post(new AlipayResponseEvent(response));
+                RxEventBus.getInstance().post(new AlipayTradePrecreateEvent(request, response));
             }
-        }).start();
+        };
+        mThreadPool.submit(runnable);
+    }
+
+    private void queryAlipayTrade(AlipayRequest request, AlipayResponse response) {
+        if (request instanceof AlipayTradePrecreateRequest && response instanceof AlipayTradePrecreateResponse) {
+            final AlipayTradePrecreateResponse precreateResponse = (AlipayTradePrecreateResponse) response;
+            Callable<Boolean> callable = new Callable<Boolean>() {
+                @Override
+                public Boolean call() throws Exception {
+                    AlipayClient alipayClient = AlipayClientFactory.getAlipayClient();
+                    AlipayTradeQueryRequest queryRequest = new AlipayTradeQueryRequest();
+                    AlipayTradeQueryContentBuilder builder = new AlipayTradeQueryContentBuilder();
+                    builder.setOutTradeNo(precreateResponse.getOutTradeNo());
+                    Log.i(TAG, "queryAlipayTrade: " + builder.toJsonString());
+                    queryRequest.setBizContent(builder.toJsonString());
+                    int loop = 5;
+                    while (loop > 0) {
+                        AlipayTradeQueryResponse queryResponse = alipayClient.execute(queryRequest);
+                        RxEventBus.getInstance().post(new AlipayTradeQueryEvent(queryRequest, queryResponse));
+                        loop--;
+                        Thread.sleep(3000);
+                    }
+                    return true;
+                }
+            };
+            mThreadPool.submit(callable);
+        }
     }
 
     @Override
     protected void onDestroy() {
+        mThreadPool.shutdownNow();
         RxEventBus.getInstance().unsubscribe(this);
         super.onDestroy();
     }

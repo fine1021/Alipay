@@ -1,4 +1,4 @@
-package com.yxkang.android.alipay;
+package com.yxkang.android.alipay.alipay;
 
 /**
  * Created by yexiaokang on 2016/4/29.
@@ -24,5 +24,14 @@ public class PayConstants {
     public static final String FORMAT_JSON = "json";
     public static final String CHARSET_UTF8 = "UTF-8";
     public static final String ALIPAY_PUBLIC_KEY = "";
+    public static final String NOTIFY_URL = "";
 
+
+    /**
+     * 响应的返回码
+     */
+    public static final String SUCCESS = "10000"; // 成功
+    public static final String PAYING = "10003";  // 用户支付中
+    public static final String FAILED = "40004";  // 失败
+    public static final String ERROR = "20000"; // 系统异常
 }
