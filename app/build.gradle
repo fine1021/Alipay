@@ -40,8 +40,5 @@ dependencies {
     apt 'com.jakewharton:butterknife-compiler:8.0.1'
     compile 'io.reactivex:rxjava:1.1.5'
     compile 'com.yxkang.rxandroid:eventbus:1.0.1'
-    compile 'commons-logging:commons-logging:1.1.1'
-    compile 'com.google.code.gson:gson:2.4'
-    compile 'commons-lang:commons-lang:2.6'
-    compile files('libs/alipay-sdk-java20160503220055.jar')
+    compile project(':alipaysdk')
 }

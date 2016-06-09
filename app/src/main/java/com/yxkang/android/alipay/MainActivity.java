@@ -22,16 +22,16 @@ import com.alipay.api.request.AlipayTradePrecreateRequest;
 import com.alipay.api.request.AlipayTradeQueryRequest;
 import com.alipay.api.response.AlipayTradePrecreateResponse;
 import com.alipay.api.response.AlipayTradeQueryResponse;
-import com.yxkang.android.alipay.alipay.AlipayClientFactory;
-import com.yxkang.android.alipay.alipay.PayConstants;
-import com.yxkang.android.alipay.alipay.internal.parser.json.JsonConverter;
-import com.yxkang.android.alipay.builder.AlipayTradePrecreateContentBuilder;
-import com.yxkang.android.alipay.builder.AlipayTradeQueryContentBuilder;
+import com.hikvision.alipaysdk.AlipayClientFactory;
+import com.hikvision.alipaysdk.PayConstants;
+import com.hikvision.alipaysdk.builder.AlipayTradePrecreateRequestBuilder;
+import com.hikvision.alipaysdk.builder.AlipayTradeQueryRequestBuilder;
+import com.hikvision.alipaysdk.internal.parser.json.JsonConverter;
+import com.hikvision.alipaysdk.model.GoodsDetail;
 import com.yxkang.android.alipay.event.AlipayTradePrecreateEvent;
 import com.yxkang.android.alipay.event.AlipayTradeQueryEvent;
 import com.yxkang.android.alipay.model.DialogModel;
 import com.yxkang.android.alipay.model.DialogModelImpl;
-import com.yxkang.android.alipay.model.GoodsDetail;
 import com.yxkang.android.alipay.util.SignaturesUtil;
 import com.yxkang.android.alipay.util.Utils;
 import com.yxkang.rxandroid.RxEventBus;
@@ -82,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
                     AlipayTradePrecreateRequest request = alipayTradePrecreateEvent.getRequest();
                     JsonConverter jsonConverter = new JsonConverter();
                     try {
-                        SignItem signItem = jsonConverter.getSignItem(request, response);
+                        SignItem signItem = jsonConverter.getSignItem(request, response.getBody());
                         Log.i(TAG, "call: sign = " + signItem.getSign());
                         Log.i(TAG, "call: signSourceDate = " + signItem.getSignSourceDate());
                     } catch (AlipayApiException e) {
@@ -117,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
                 AlipayTradeQueryRequest request = alipayTradeQueryEvent.getRequest();
                 JsonConverter jsonConverter = new JsonConverter();
                 try {
-                    SignItem signItem = jsonConverter.getSignItem(request, response);
+                    SignItem signItem = jsonConverter.getSignItem(request, response.getBody());
                     Log.i(TAG, "call: sign = " + signItem.getSign());
                     Log.i(TAG, "call: signSourceDate = " + signItem.getSignSourceDate());
                 } catch (AlipayApiException e) {
@@ -171,15 +171,15 @@ public class MainActivity extends AppCompatActivity {
                 AlipayClient alipayClient = AlipayClientFactory.getAlipayClient();
                 AlipayTradePrecreateRequest request = new AlipayTradePrecreateRequest();
                 request.setNotifyUrl(PayConstants.NOTIFY_URL);
-                AlipayTradePrecreateContentBuilder builder = new AlipayTradePrecreateContentBuilder();
-                builder.setOutTradeNo(Utils.createTradeNo());
-                builder.setTotalAmount("0.1");
-                builder.setSubject("Orange Juice");
                 List<GoodsDetail> list = new ArrayList<>();
                 list.add(GoodsDetail.newInstance("apple-01", "apple", 5, 1).setBody("apple phone detail"));
                 list.add(GoodsDetail.newInstance("milk-01", "milk", 5, 1).setBody("milk detail"));
-                builder.setGoodsDetailList(list);
-                builder.setTimeExpress("5m");
+                AlipayTradePrecreateRequestBuilder builder = new AlipayTradePrecreateRequestBuilder();
+                builder.setOutTradeNo(Utils.createTradeNo())
+                        .setTotalAmount("0.1")
+                        .setSubject("Orange Juice")
+                        .setTimeoutExpress("5m")
+                        .setGoodsDetailList(list);
                 Log.i(TAG, "sendPrecreateRequest: " + builder.toJsonString());
                 request.setBizContent(builder.toJsonString());
                 AlipayTradePrecreateResponse response = null;
@@ -204,17 +204,12 @@ public class MainActivity extends AppCompatActivity {
                 public Boolean call() throws Exception {
                     AlipayClient alipayClient = AlipayClientFactory.getAlipayClient();
                     AlipayTradeQueryRequest queryRequest = new AlipayTradeQueryRequest();
-                    AlipayTradeQueryContentBuilder builder = new AlipayTradeQueryContentBuilder();
+                    AlipayTradeQueryRequestBuilder builder = new AlipayTradeQueryRequestBuilder();
                     builder.setOutTradeNo(precreateResponse.getOutTradeNo());
                     Log.i(TAG, "queryAlipayTrade: " + builder.toJsonString());
                     queryRequest.setBizContent(builder.toJsonString());
-                    int loop = 5;
-                    while (loop > 0) {
-                        AlipayTradeQueryResponse queryResponse = alipayClient.execute(queryRequest);
-                        RxEventBus.getInstance().post(new AlipayTradeQueryEvent(queryRequest, queryResponse));
-                        loop--;
-                        Thread.sleep(3000);
-                    }
+                    AlipayTradeQueryResponse queryResponse = alipayClient.execute(queryRequest);
+                    RxEventBus.getInstance().post(new AlipayTradeQueryEvent(queryRequest, queryResponse));
                     return true;
                 }
             };
